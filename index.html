@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wumpus Logic Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       STYLES
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────────────── */
+    :root {
+      --bg:          #04080f;
+      --surface:     #080f1e;
+      --surface2:    #0c1628;
+      --border:      #162a4a;
+      --border-hi:   #2050a0;
+
+      --accent:      #00c8ff;
+      --accent-dim:  rgba(0, 200, 255, 0.15);
+      --accent2:     #ff8c00;
+      --accent2-dim: rgba(255, 140, 0, 0.12);
+
+      --safe:        #00e87a;
+      --safe-dim:    rgba(0, 232, 122, 0.10);
+      --danger:      #ff1f4a;
+      --danger-dim:  rgba(255, 31, 74, 0.10);
+      --wumpus-clr:  #c840ff;
+      --wumpus-dim:  rgba(200, 64, 255, 0.10);
+      --gold-clr:    #ffd600;
+
+      --text:        #9fbdd6;
+      --text-dim:    rgba(159, 189, 214, 0.45);
+
+      --mono:  'Share Tech Mono', monospace;
+      --head:  'Orbitron', sans-serif;
+
+      --radius: 6px;
+      --cell-sz: 64px;
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Body ───────────────────────────────────────────────────────────── */
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 60% 50% at 15% 60%, rgba(0, 80, 200, 0.06) 0%, transparent 100%),
+        radial-gradient(ellipse 50% 40% at 85% 20%, rgba(0, 180, 255, 0.04) 0%, transparent 100%);
+      color: var(--text);
+      font-family: var(--mono);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 16px 48px;
+      gap: 0;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    header h1 {
+      font-family: var(--head);
+      font-size: clamp(1.3rem, 4vw, 2.1rem);
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      color: var(--accent);
+      text-shadow: 0 0 28px rgba(0, 200, 255, 0.45);
+      margin-bottom: 4px;
+    }
+    header .sub {
+      font-size: 0.65rem;
+      letter-spacing: 0.22em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    .layout {
+      display: flex;
+      gap: 16px;
+      width: 100%;
+      max-width: 1160px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* ── Panel ──────────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 6px 32px rgba(0, 0, 0, 0.55),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    }
+    .panel-title {
+      font-family: var(--head);
+      font-size: 0.6rem;
+      letter-spacing: 0.28em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Controls panel ─────────────────────────────────────────────────── */
+    .controls { width: 200px; flex-shrink: 0; }
+
+    .field { margin-bottom: 12px; }
+    .field label {
+      display: block;
+      font-size: 0.6rem;
+      letter-spacing: 0.14em;
+      color: var(--accent);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .field input[type="number"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .field input[type="number"]:focus { border-color: var(--accent); }
+
+    /* Buttons */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 9px 12px;
+      margin-bottom: 8px;
+      border: none;
+      border-radius: 4px;
+      font-family: var(--head);
+      font-size: 0.58rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s;
+    }
+    .btn:hover        { transform: translateY(-1px); }
+    .btn:active       { transform: translateY(0); }
+
+    .btn-new {
+      background: linear-gradient(135deg, #0050a0, #0080cc);
+      color: #fff;
+      box-shadow: 0 0 14px rgba(0, 128, 204, 0.25);
+    }
+    .btn-new:hover    { box-shadow: 0 0 24px rgba(0, 200, 255, 0.45); }
+
+    .btn-step {
+      background: linear-gradient(135deg, #003520, #005535);
+      color: var(--safe);
+      box-shadow: 0 0 10px rgba(0, 232, 122, 0.15);
+    }
+    .btn-step:hover   { box-shadow: 0 0 20px rgba(0, 232, 122, 0.35); }
+
+    .btn-auto {
+      background: linear-gradient(135deg, #3a1a00, #704000);
+      color: var(--accent2);
+      box-shadow: 0 0 10px rgba(255, 140, 0, 0.15);
+    }
+    .btn-auto:hover   { box-shadow: 0 0 20px rgba(255, 140, 0, 0.35); }
+
+    .btn-stop {
+      background: transparent;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+    }
+    .btn-stop:hover   { background: var(--danger-dim); }
+
+    /* Speed slider */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .slider-row label {
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 4px;
+    }
+    .leg-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+    }
+    .leg-swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* ── Grid panel ─────────────────────────────────────────────────────── */
+    .grid-panel { flex: 1; min-width: 280px; }
+
+    #grid {
+      display: grid;
+      gap: 4px;
+      width: fit-content;
+      margin: 0 auto;
+    }
+
+    .cell {
+      width:  var(--cell-sz);
+      height: var(--cell-sz);
+      border-radius: 5px;
+      border: 1px solid rgba(22, 42, 74, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.18s, border-color 0.2s, box-shadow 0.2s;
+      user-select: none;
+    }
+    .cell:hover {
+      transform: scale(1.08);
+      z-index: 3;
+      border-color: var(--accent);
+      box-shadow: 0 0 14px var(--accent-dim);
+    }
+    .cell .coord {
+      position: absolute;
+      top: 3px;
+      left: 5px;
+      font-size: 0.4rem;
+      opacity: 0.3;
+      pointer-events: none;
+    }
+    .cell .main-icon { font-size: 1.45rem; line-height: 1; }
+    .cell .perc-row  { font-size: 0.72rem; line-height: 1; margin-top: 1px; }
+
+    /* Cell colour states */
+    .c-unknown  { background: #080f1e; }
+    .c-visited  { background: #0b2038; }
+    .c-safe     { background: #031a0e; border-color: rgba(0,232,122,0.25) !important; }
+    .c-agent    {
+      background: #251a00;
+      border-color: rgba(255, 214, 0, 0.5) !important;
+      box-shadow: 0 0 18px rgba(255, 214, 0, 0.25);
+    }
+    .c-gold     { background: #201600; border-color: rgba(255,214,0,0.4) !important; }
+    .c-cpit     { background: #1a0008; border-color: rgba(255,31,74,0.5) !important; }
+    .c-cwumpus  { background: #120018; border-color: rgba(200,64,255,0.45) !important; }
+    .c-pit      { background: #280010; border-color: rgba(255,31,74,0.6) !important; }
+    .c-wumpus   { background: #1c0028; border-color: rgba(200,64,255,0.55) !important; }
+
+    /* ── Metrics panel ──────────────────────────────────────────────────── */
+    .metrics { width: 210px; flex-shrink: 0; }
+
+    .metric-block { margin-bottom: 16px; }
+    .metric-label {
+      font-size: 0.58rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .metric-value {
+      font-family: var(--head);
+      font-size: 1.5rem;
+      color: var(--accent);
+      line-height: 1.1;
+    }
+    .metric-value.sm { font-size: 1rem; }
+
+    /* Percept badges */
+    .percept-list { display: flex; flex-direction: column; gap: 7px; }
+    .perc-badge {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 11px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      transition: all 0.25s;
+    }
+    .perc-badge.on  {
+      border-color: var(--accent2);
+      color: var(--accent2);
+      background: var(--accent2-dim);
+    }
+    .perc-badge.off { opacity: 0.32; }
+
+    /* KB Log */
+    #kb-log {
+      max-height: 130px;
+      overflow-y: auto;
+      font-size: 0.58rem;
+      line-height: 1.65;
+      color: var(--text-dim);
+      padding-right: 4px;
+    }
+    #kb-log::-webkit-scrollbar       { width: 3px; }
+    #kb-log::-webkit-scrollbar-track { background: transparent; }
+    #kb-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Message bar ────────────────────────────────────────────────────── */
+    #msg-bar {
+      width: 100%;
+      max-width: 1160px;
+      margin-top: 14px;
+      padding: 11px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      min-height: 40px;
+      transition: border-color 0.3s, color 0.3s, background 0.3s;
+    }
+    #msg-bar.state-win  {
+      border-color: var(--safe);
+      color: var(--safe);
+      background: var(--safe-dim);
+    }
+    #msg-bar.state-lose {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: var(--danger-dim);
+    }
+
+    /* ── Separator ──────────────────────────────────────────────────────── */
+    .sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 14px 0;
+    }
+
+    /* ── Animations ─────────────────────────────────────────────────────── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .panel { animation: fadeIn 0.4s ease both; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<header>
+  <h1>⚡ WUMPUS LOGIC AGENT</h1>
+  <p class="sub">Knowledge-Based Agent &nbsp;·&nbsp; Propositional Logic &nbsp;·&nbsp; Resolution Refutation</p>
+</header>
+
+<div class="layout">
+
+  <!-- ── Controls ──────────────────────────────────────────────────────── -->
+  <div class="panel controls">
+    <div class="panel-title">⚙ Configuration</div>
+
+    <div class="field">
+      <label>Grid Rows</label>
+      <input type="number" id="inp-rows" value="5" min="4" max="10" />
+    </div>
+    <div class="field">
+      <label>Grid Cols</label>
+      <input type="number" id="inp-cols" value="5" min="4" max="10" />
+    </div>
+
+    <button class="btn btn-new"  onclick="newGame()">▶ New Game</button>
+    <button class="btn btn-step" onclick="stepOnce()">⟶ Agent Step</button>
+    <button class="btn btn-auto" id="btn-auto" onclick="toggleAuto()">⟳ Auto Run</button>
+    <button class="btn btn-stop" id="btn-stop" onclick="stopAuto()" style="display:none">⬛ Stop</button>
+
+    <div class="slider-row">
+      <label>Speed</label>
+      <input type="range" id="speed" min="100" max="1500" value="650" step="50" />
+    </div>
+
+    <hr class="sep" />
+
+    <!-- Legend -->
+    <div class="panel-title" style="margin-bottom:10px">Legend</div>
+    <div class="legend">
+      <div class="leg-row"><div class="leg-swatch" style="background:#251a00;border-color:rgba(255,214,0,0.4)"></div> Agent</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#0b2038"></div> Visited</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#031a0e;border-color:rgba(0,232,122,0.3)"></div> Safe (KB)</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#080f1e"></div> Unknown</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#1a0008;border-color:rgba(255,31,74,0.5)"></div> Conf. Pit ⚠️</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#120018;border-color:rgba(200,64,255,0.45)"></div> Conf. Wumpus ☠️</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#280010;border-color:rgba(255,31,74,0.6)"></div> Pit (revealed)</div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#1c0028;border-color:rgba(200,64,255,0.55)"></div> Wumpus (revealed)</div>
+    </div>
+  </div>
+
+  <!-- ── Grid ──────────────────────────────────────────────────────────── -->
+  <div class="panel grid-panel">
+    <div class="panel-title">🗺 World Grid &nbsp;<span id="grid-size-label" style="opacity:0.4;font-size:0.55rem;"></span></div>
+    <div id="grid"></div>
+  </div>
+
+  <!-- ── Metrics ───────────────────────────────────────────────────────── -->
+  <div class="panel metrics">
+    <div class="panel-title">📊 Metrics</div>
+
+    <div class="metric-block">
+      <div class="metric-label">Inference Steps</div>
+      <div class="metric-value" id="m-steps">—</div>
+    </div>
+    <div class="metric-block">
+      <div class="metric-label">KB Clauses</div>
+      <div class="metric-value" id="m-clauses">—</div>
+    </div>
+    <div class="metric-block">
+      <div class="metric-label">Cells Visited</div>
+      <div class="metric-value" id="m-visited">—</div>
+    </div>
+    <div class="metric-block">
+      <div class="metric-label">Safe Inferred</div>
+      <div class="metric-value" id="m-safe">—</div>
+    </div>
+    <div class="metric-block">
+      <div class="metric-label">Agent Position</div>
+      <div class="metric-value sm" id="m-pos">—</div>
+    </div>
+
+    <hr class="sep" />
+
+    <!-- Active percepts -->
+    <div class="panel-title" style="margin-bottom:10px">Active Percepts</div>
+    <div class="percept-list">
+      <div class="perc-badge off" id="badge-breeze">💨 &nbsp;Breeze</div>
+      <div class="perc-badge off" id="badge-stench">🦨 &nbsp;Stench</div>
+    </div>
+
+    <hr class="sep" />
+
+    <!-- KB log -->
+    <div class="panel-title" style="margin-bottom:8px">KB Activity Log</div>
+    <div id="kb-log">— Start a new game —</div>
+  </div>
+
+</div>
+
+<!-- ── Message bar ────────────────────────────────────────────────────── -->
+<div id="msg-bar">Click <strong>New Game</strong> to initialise the world, then use <strong>Agent Step</strong> or <strong>Auto Run</strong>.</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+/* ── State ────────────────────────────────────────────────────────────── */
+let G        = null;   // current game state from server
+let autoTimer = null;
+const logLines = [];
+
+/* ── API helpers ──────────────────────────────────────────────────────── */
+async function post(url, body = {}) {
+  const r = await fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+  return r.json();
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────── */
+async function newGame() {
+  stopAuto();
+  logLines.length = 0;
+  const rows = clamp(+document.getElementById('inp-rows').value, 4, 10);
+  const cols = clamp(+document.getElementById('inp-cols').value, 4, 10);
+  G = await post('/new', { rows, cols });
+  pushLog(`New ${rows}×${cols} world. Agent at (0,0).`);
+  render();
+}
+
+async function stepOnce() {
+  if (!G || G.game_over) return;
+  G = await post('/step');
+  pushLog(G.message);
+  render();
+}
+
+function toggleAuto() {
+  if (autoTimer) { stopAuto(); return; }
+  document.getElementById('btn-auto').style.display = 'none';
+  document.getElementById('btn-stop').style.display = 'block';
+  const delay = () => 1600 - +document.getElementById('speed').value;
+  autoTimer = setInterval(async () => {
+    if (!G || G.game_over) { stopAuto(); return; }
+    await stepOnce();
+  }, delay());
+}
+
+function stopAuto() {
+  clearInterval(autoTimer);
+  autoTimer = null;
+  document.getElementById('btn-auto').style.display = 'block';
+  document.getElementById('btn-stop').style.display = 'none';
+}
+
+async function clickCell(r, c) {
+  if (!G || G.game_over) return;
+  G = await post('/move', { row: r, col: c });
+  pushLog(G.message);
+  render();
+}
+
+/* ── Render ───────────────────────────────────────────────────────────── */
+function render() {
+  if (!G) return;
+
+  renderGrid();
+  renderMetrics();
+  renderPercepts();
+  renderMessage();
+  renderLog();
+
+  if (G.game_over) stopAuto();
+}
+
+function renderGrid() {
+  const el = document.getElementById('grid');
+  el.style.gridTemplateColumns = `repeat(${G.cols}, var(--cell-sz))`;
+  document.getElementById('grid-size-label').textContent = `${G.rows} × ${G.cols}`;
+  el.innerHTML = '';
+
+  for (let r = 0; r < G.rows; r++) {
+    for (let c = 0; c < G.cols; c++) {
+      const div = document.createElement('div');
+      div.className = `cell ${cellClass(r, c)}`;
+      div.onclick   = () => clickCell(r, c);
+
+      const { icon, perc } = cellContent(r, c);
+
+      div.innerHTML = `
+        <span class="coord">${r},${c}</span>
+        <span class="main-icon">${icon}</span>
+        ${perc ? `<span class="perc-row">${perc}</span>` : ''}
+      `;
+      el.appendChild(div);
+    }
+  }
+}
+
+function cellClass(r, c) {
+  const isAgent  = G.agent[0] === r && G.agent[1] === c;
+  const isPit    = G.pits.some(p   => p[0] === r && p[1] === c);
+  const isWumpus = G.wumpus.length && G.wumpus[0] === r && G.wumpus[1] === c;
+  const isCPit   = G.confirmed_pit.some(p    => p[0] === r && p[1] === c);
+  const isCWump  = G.confirmed_wumpus.some(p => p[0] === r && p[1] === c);
+  const isVisit  = G.visited.some(p  => p[0] === r && p[1] === c);
+  const isSafe   = G.safe.some(p     => p[0] === r && p[1] === c);
+  const isGold   = G.gold[0] === r && G.gold[1] === c;
+
+  if (isAgent)                      return 'c-agent';
+  if (isPit)                        return 'c-pit';
+  if (isWumpus)                     return 'c-wumpus';
+  if (isCPit)                       return 'c-cpit';
+  if (isCWump)                      return 'c-cwumpus';
+  if (isGold && G.game_over)        return 'c-gold';
+  if (isVisit)                      return 'c-visited';
+  if (isSafe)                       return 'c-safe';
+  return 'c-unknown';
+}
+
+function cellContent(r, c) {
+  const isAgent  = G.agent[0] === r && G.agent[1] === c;
+  const isPit    = G.pits.some(p   => p[0] === r && p[1] === c);
+  const isWumpus = G.wumpus.length && G.wumpus[0] === r && G.wumpus[1] === c;
+  const isCPit   = G.confirmed_pit.some(p    => p[0] === r && p[1] === c);
+  const isCWump  = G.confirmed_wumpus.some(p => p[0] === r && p[1] === c);
+  const isVisit  = G.visited.some(p  => p[0] === r && p[1] === c);
+  const isGold   = G.gold[0] === r && G.gold[1] === c;
+  const key      = `${r},${c}`;
+  const prc      = G.percepts[key] || {};
+
+  let icon = '';
+  if (isAgent)              icon += '🤖';
+  if (isPit)                icon += '🕳️';
+  if (isWumpus)             icon += '👾';
+  if (isCPit)               icon += '⚠️';
+  if (isCWump)              icon += '☠️';
+  if (isGold && G.game_over) icon += '🏆';
+  else if (isGold && isVisit) icon += '✨';
+
+  if (!icon) icon = isVisit ? '' : '?';
+
+  let perc = '';
+  if (prc.breeze) perc += '💨';
+  if (prc.stench) perc += '🦨';
+
+  return { icon, perc };
+}
+
+function renderMetrics() {
+  setText('m-steps',   G.inference_steps.toLocaleString());
+  setText('m-clauses', G.clause_count.toLocaleString());
+  setText('m-visited', G.visited.length);
+  setText('m-safe',    G.safe.length);
+  setText('m-pos',     `(${G.agent[0]}, ${G.agent[1]})`);
+}
+
+function renderPercepts() {
+  const bp = G.current_percepts.breeze;
+  const sp = G.current_percepts.stench;
+  setClass('badge-breeze', bp ? 'perc-badge on' : 'perc-badge off');
+  setClass('badge-stench', sp ? 'perc-badge on' : 'perc-badge off');
+}
+
+function renderMessage() {
+  const bar = document.getElementById('msg-bar');
+  bar.textContent = G.message || '—';
+  bar.className   = G.won ? 'state-win' : G.game_over ? 'state-lose' : '';
+}
+
+function renderLog() {
+  document.getElementById('kb-log').innerHTML =
+    logLines.map(l => `<div>${l}</div>`).join('');
+}
+
+/* ── Log ──────────────────────────────────────────────────────────────── */
+function pushLog(msg) {
+  const t = new Date().toLocaleTimeString('en', {
+    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  logLines.unshift(`[${t}] ${msg}`);
+  if (logLines.length > 50) logLines.pop();
+}
+
+/* ── Utilities ────────────────────────────────────────────────────────── */
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function setText(id, val)  { document.getElementById(id).textContent = val; }
+function setClass(id, cls) { document.getElementById(id).className   = cls; }
+
+/* ── Boot ─────────────────────────────────────────────────────────────── */
+window.addEventListener('load', newGame);
+</script>
+</body>
+</html>
